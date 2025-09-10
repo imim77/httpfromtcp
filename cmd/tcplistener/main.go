@@ -1,16 +1,16 @@
 package main
 
 import (
-	"bytes"
 	"fmt"
-	"io"
 	"log"
 	"net"
+
+	"github.com/imim77/httpfromtcp/internal/request"
 )
 
 const port = ":42069"
 
-func getLinesChannel(f io.ReadCloser) <-chan string {
+/*func getLinesChannel(f io.ReadCloser) <-chan string {
 	ch := make(chan string, 1)
 	go func() {
 		defer f.Close()
@@ -38,6 +38,7 @@ func getLinesChannel(f io.ReadCloser) <-chan string {
 	return ch
 
 }
+*/
 
 func main() {
 	listener, err := net.Listen("tcp", port)
@@ -53,11 +54,13 @@ func main() {
 		}
 		fmt.Println("Connection has been accepted")
 
-		for line := range getLinesChannel(conn) {
-			fmt.Printf("%s\n", line)
+		r, err := request.RequestFromReader(conn)
+		if err != nil {
+			log.Fatalf("error: %s\n", err.Error())
 		}
-		fmt.Println("Connection has been closed")
-
+		fmt.Printf("Request line:\n")
+		fmt.Printf("- Method: %s\n", r.RequestLine.Method)
+		fmt.Printf("- Target: %s\n", r.RequestLine.RequestTarget)
+		fmt.Printf("- Version: %s\n", r.RequestLine.HttpVersion)
 	}
-
 }
