@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strconv"
 
 	"github.com/imim77/httpfromtcp/internal/headers"
 )
@@ -15,6 +16,7 @@ const (
 	StateInit    praserState = "init"
 	StateDone    praserState = "done"
 	StateHeaders praserState = "headers"
+	StateBody    praserState = "body"
 )
 
 type RequestLine struct {
@@ -27,13 +29,33 @@ type Request struct {
 	Headers     *headers.Headers
 	RequestLine RequestLine
 	state       praserState
+	Body        []byte
+}
+
+func getInt(headers *headers.Headers, name string, defaultValue int) int {
+	valueStr, exists := headers.Get(name)
+	if !exists {
+		return defaultValue
+	}
+	value, err := strconv.Atoi(valueStr)
+	if err != nil {
+		return 0
+	}
+	return value
+
 }
 
 func newRequest() *Request {
 	return &Request{
 		state:   StateInit,
 		Headers: headers.NewHeaders(),
+		Body:    []byte(""),
 	}
+}
+
+func (r *Request) hasBody() bool {
+	length := getInt(r.Headers, "content-length", 0) // total size of the body according to the "content-length" header
+	return length > 0
 }
 
 func (r *Request) parse(data []byte) (int, error) {
@@ -41,6 +63,9 @@ func (r *Request) parse(data []byte) (int, error) {
 outer:
 	for {
 		currentdata := data[read:]
+		if len(currentdata) == 0 {
+			break outer
+		}
 
 		switch r.state {
 		case StateInit:
@@ -71,8 +96,27 @@ outer:
 			read += n
 
 			if done {
+				if r.hasBody() {
+					r.state = StateBody
+				} else {
+					r.state = StateDone
+				}
+			}
+		case StateBody:
+			length := getInt(r.Headers, "content-length", 0) // total size of the body according to the "content-length" header
+			if length == 0 {
+				panic("chunked not implemented yet")
+			}
+			// r.Body => already read part of the body
+			// ammount we have left to read or the ammount of the data(for example 20B) that is avaliable in the current block
+			remaining := min(length-len(r.Body), len(currentdata))
+			r.Body = append(r.Body, currentdata[:remaining]...)
+			read += remaining
+
+			if len(r.Body) == length {
 				r.state = StateDone
 			}
+
 		default:
 			panic("somehow shit")
 		}
