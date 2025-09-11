@@ -7,24 +7,34 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestHeaderParse(t *testing.T) {
-	// Test: Valid single header
+func TestHeadersParse(t *testing.T) {
+	//// Test: Valid single header
 	headers := NewHeaders()
-	data := []byte("Host: localhost:42069\r\nFooFoo:     barbar    \r\n")
+	data := []byte("Host: localhost:42069\r\nFooFoo:        barbar\r\n\r\n")
 	n, done, err := headers.Parse(data)
 	require.NoError(t, err)
 	require.NotNil(t, headers)
-	assert.Equal(t, "localhost:42069", headers["Host"])
-	assert.Equal(t, "barbar", headers["FooFoo"])
-	assert.Equal(t, "", headers["MissingKey"])
-	assert.Equal(t, 47, n)
-	assert.False(t, done)
+	assert.Equal(t, "localhost:42069", headers.Get("HOST"))
+	assert.Equal(t, "barbar", headers.Get("FooFoo"))
+	assert.Equal(t, "", headers.Get("Missing key"))
+	assert.Equal(t, 48, n)
+	assert.True(t, done)
 
 	// Test: Invalid spacing header
 	headers = NewHeaders()
-	data = []byte("       Host : localhost:42069       \r\n\r\n")
+	data = []byte("H©st: localhost:42069\r\n\r\n")
 	n, done, err = headers.Parse(data)
 	require.Error(t, err)
 	assert.Equal(t, 0, n)
 	assert.False(t, done)
+
+	// nezzzz
+	headers = NewHeaders()
+	data = []byte("Host: localhost:42069\r\nHost: localhost:42069\r\n")
+	n, done, err = headers.Parse(data)
+	require.NoError(t, err)
+	require.NotNil(t, headers)
+	assert.Equal(t, "localhost:42069,localhost:42069", headers.Get("HOST"))
+	assert.False(t, done)
+
 }
