@@ -32,6 +32,12 @@ func (h *Headers) Get(key string) string {
 	return h.headers[strings.ToLower(key)]
 }
 
+func (h *Headers) ForEach(cb func(k, v string)) {
+	for k, v := range h.headers {
+		cb(k, v)
+	}
+}
+
 func parseHeader(filedLine []byte) (string, string, error) {
 	parts := bytes.SplitN(filedLine, []byte(":"), 2)
 	if len(parts) != 2 {

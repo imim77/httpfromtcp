@@ -5,13 +5,16 @@ import (
 	"errors"
 	"fmt"
 	"io"
+
+	"github.com/imim77/httpfromtcp/internal/headers"
 )
 
 type praserState string
 
 const (
-	StateInit praserState = "init"
-	StateDone praserState = "done"
+	StateInit    praserState = "init"
+	StateDone    praserState = "done"
+	StateHeaders praserState = "headers"
 )
 
 type RequestLine struct {
@@ -21,13 +24,15 @@ type RequestLine struct {
 }
 
 type Request struct {
+	Headers     *headers.Headers
 	RequestLine RequestLine
 	state       praserState
 }
 
 func newRequest() *Request {
 	return &Request{
-		state: StateInit,
+		state:   StateInit,
+		Headers: headers.NewHeaders(),
 	}
 }
 
@@ -35,9 +40,12 @@ func (r *Request) parse(data []byte) (int, error) {
 	read := 0
 outer:
 	for {
+		currentdata := data[read:]
+
 		switch r.state {
 		case StateInit:
-			rl, n, err := parseRequestLine(data[read:])
+
+			rl, n, err := parseRequestLine(currentdata)
 			if err != nil {
 				return 0, err
 			}
@@ -46,10 +54,29 @@ outer:
 			}
 			r.RequestLine = *rl
 			read += n
-			r.state = StateDone
+			r.state = StateHeaders
 		case StateDone:
 			break outer
+		case StateHeaders:
+
+			n, done, err := r.Headers.Parse(currentdata)
+			if err != nil {
+				return 0, err
+			}
+
+			if n == 0 { // we couldn't read anything
+				break outer
+			}
+
+			read += n
+
+			if done {
+				r.state = StateDone
+			}
+		default:
+			panic("somehow shit")
 		}
+
 	}
 	return read, nil
 }
