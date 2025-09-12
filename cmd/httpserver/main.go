@@ -3,8 +3,10 @@ package main
 import (
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
 	"github.com/imim77/httpfromtcp/internal/request"
@@ -57,14 +59,42 @@ func main() {
 		body := respond200()
 		status := response.StatusOK
 
-		switch req.RequestLine.RequestTarget {
-		case "/yourproblem":
+		if req.RequestLine.RequestTarget == "/yourproblem" {
 			body = respond400()
 			status = response.StatusBadRequest
-		case "/myproblem":
+		} else if req.RequestLine.RequestTarget == "/myproblem" {
 			body = respond500()
 			status = response.StatusServerError
+		} else if strings.HasPrefix(req.RequestLine.RequestTarget, "/httpbin/stream") {
+			target := req.RequestLine.RequestTarget
+			resp, err := http.Get("https://httpbin.org/" + target[len("/httpbin/"):])
+			if err != nil {
+				body = respond500()
+				status = response.StatusServerError
+			} else {
+				w.WriteStatusLine(response.StatusOK)
+				h.Delete("Content-length")
+				h.Set("transfer-encoding", "chunked")
+				h.Replace("content-type", "text/plain")
+				w.WriteHeaders(*h)
+
+				for {
+					// get some data
+					data := make([]byte, 32)
+					n, err := resp.Body.Read(data)
+					if err != nil { // <-> and back and fourt (between geting and writing)
+						break
+					}
+					// write some data
+					w.WriteBody([]byte(fmt.Sprintf("%x\r\n", n)))
+					w.WriteBody(data[:n])
+					w.WriteBody([]byte("\r\n"))
+				}
+				w.WriteBody([]byte("0\r\n\r\n"))
+				return
+			}
 		}
+
 		h.Replace("Content-length", fmt.Sprintf("%d", len(body)))
 		w.WriteStatusLine(status)
 		w.WriteHeaders(*h)
