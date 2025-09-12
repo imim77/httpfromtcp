@@ -33,6 +33,11 @@ func (h *Headers) Get(key string) (string, bool) {
 	return str, ok
 }
 
+func (h *Headers) Replace(key, val string) {
+	key = strings.ToLower(key)
+	h.headers[key] = val
+}
+
 func (h *Headers) ForEach(cb func(k, v string)) {
 	for k, v := range h.headers {
 		cb(k, v)
